@@ -6,6 +6,11 @@ extends Character
 ## - Click an enemy: the player chases it and attacks once in range.
 ## Movement/health exports (move_speed, acceleration, max_health, ...) come from Character.
 
+## Emitted whenever level or experience changes (including on level-up).
+signal experience_changed(level: int, experience: int, required: int)
+## Emitted once for each level gained.
+signal leveled_up(new_level: int)
+
 ## Distance from the target at which the player is considered to have arrived.
 @export var stop_distance: float = 0.1
 ## World-space Y height of the ground plane used for click raycasting.
@@ -42,6 +47,49 @@ extends Character
 
 ## How tightly the glow hugs the edge. Higher = thinner rim, lower = glow reaches further in.
 @export var glow_edge_power: float = 2.5
+
+@export_group("Attributes")
+## Strength: adds max health and attack damage.
+@export var strength: int = 0:
+	set(value):
+		strength = maxi(value, 0)
+		_on_attributes_changed()
+## Dexterity: adds movement speed and attack speed.
+@export var dexterity: int = 0:
+	set(value):
+		dexterity = maxi(value, 0)
+		_on_attributes_changed()
+## Intelligence: adds defense.
+@export var intelligence: int = 0:
+	set(value):
+		intelligence = maxi(value, 0)
+		_on_attributes_changed()
+
+@export_group("Stat Scaling")
+## Defense the player has before any intelligence bonus.
+@export var base_defense: float = 0.0
+## Max health gained per point of strength.
+@export var health_per_strength: float = 5.0
+## Attack damage gained per point of strength.
+@export var damage_per_strength: float = 1.0
+## Movement speed (units/sec) gained per point of dexterity.
+@export var move_speed_per_dexterity: float = 0.05
+## Attack speed gained per point of dexterity, as a fraction (0.01 = 1% faster).
+@export var attack_speed_per_dexterity: float = 0.01
+## Defense gained per point of intelligence.
+@export var defense_per_intelligence: float = 1.0
+## Controls how quickly defense pays off: damage taken is multiplied by
+## defense_scale / (defense_scale + defense). Higher scale = defense matters less.
+@export var defense_scale: float = 100.0
+
+@export_group("Leveling")
+## The highest level the player can reach.
+@export var max_level: int = 100
+## Experience needed to go from level 1 to level 2. Later levels scale up from this.
+@export var xp_base: float = 25.0
+## How steeply the requirement grows: needed = xp_base * level ^ xp_exponent.
+## Anything above 0 makes every level cost more than the one before.
+@export var xp_exponent: float = 1.5
 
 @export_group("Respawn")
 ## Seconds of invulnerability after respawning.
@@ -84,6 +132,13 @@ const DAMAGE_COLOR := Color(1.0, 0.55, 0.2)
 const HEAL_COLOR := Color(0.3, 1.0, 0.4)
 
 var _heal_flash_timer: float = 0.0
+
+var _base_max_health: int = 100
+var _stats_ready: bool = false
+
+## Current level (starts at 1 every game) and experience earned toward the next level.
+var level: int = 1
+var experience: int = 0
 var _model: MeshInstance3D
 var _model_rest_position: Vector3
 var _model_rest_basis: Basis
@@ -92,13 +147,38 @@ var _fall_axis: Vector3 = Vector3.RIGHT
 var _fall_drop: float = 0.5
 var _fall_progress: float = 0.0 # 0 = standing, 1 = lying down
 
+var _anim: AnimationPlayer
+var _anim_root: Node3D
+var _anim_root_rest: Transform3D
+var _playing_action: bool = false
+var _clip_idle: StringName
+var _clip_run: StringName
+var _clip_sprint: StringName
+var _clip_attack: StringName
+var _clip_death: StringName
+
+const ANIM_IDLE := "Idle_Loop"
+const ANIM_WALK := "Walk_Loop"
+const ANIM_JOG := "Jog_Fwd_Loop"
+const ANIM_SPRINT := "Sprint_Loop"
+const ANIM_ATTACK := "Punch_Jab"
+const ANIM_DEATH := "Death01"
+
 
 func _ready() -> void:
+	# max_health (from Character) is the base value here; fold in the strength bonus
+	# before the base class fills health to the maximum.
+	_base_max_health = max_health
+	max_health = _base_max_health + int(round(strength * health_per_strength))
+
 	super._ready()
+	_stats_ready = true
 	add_to_group("player")
 	_target_position = global_position
 
-	_model = _get_model()
+	_setup_animations()
+	if _model == null:
+		_model = _get_model()
 	if _model != null:
 		_model_rest_position = _model.position
 		_model_rest_basis = _model.basis
@@ -131,6 +211,10 @@ func _die() -> void:
 
 ## Tips the model onto its side and lowers it so it lies on the ground.
 func _play_fall_animation() -> void:
+	_set_model_visible(true)
+	if _play_clip(ANIM_DEATH, 0.1):
+		_playing_action = true
+		return
 	if _model == null:
 		return
 
@@ -157,6 +241,8 @@ func _play_fall_animation() -> void:
 
 ## Stands the model back up (used on respawn).
 func _play_stand_animation() -> void:
+	if _reset_model_pose():
+		return
 	if _model == null:
 		return
 	if _pose_tween != null:
@@ -177,6 +263,163 @@ func _get_model() -> MeshInstance3D:
 		if child is MeshInstance3D:
 			return child
 	return null
+
+
+func _setup_animations() -> void:
+	_anim = _find_richest_animation_player()
+	if _anim == null:
+		return
+
+	# Hide the placeholder capsule; the mannequin is the visible body now.
+	for child in get_children():
+		if child is MeshInstance3D:
+			child.visible = false
+
+	_anim_root = _anim.get_parent() as Node3D
+	if _anim_root != null:
+		_anim_root_rest = _anim_root.transform
+	for mesh in find_children("*", "MeshInstance3D", true, false):
+		if mesh.get_parent() == self:
+			continue
+		_model = mesh
+		if String(mesh.name).to_lower().contains("mannequin"):
+			break
+
+	_resolve_animation_clips()
+
+	if not _anim.animation_finished.is_connected(_on_animation_finished):
+		_anim.animation_finished.connect(_on_animation_finished)
+
+	for path in [_clip_idle, _clip_run, _clip_sprint]:
+		if String(path).is_empty() or not _anim.has_animation(path):
+			continue
+		var animation := _anim.get_animation(path)
+		if animation != null:
+			animation.loop_mode = Animation.LOOP_LINEAR
+
+	_play_clip(ANIM_IDLE, 0.0)
+
+
+func _find_richest_animation_player() -> AnimationPlayer:
+	var best: AnimationPlayer = null
+	var best_count := -1
+	for node in find_children("*", "AnimationPlayer", true, false):
+		var player := node as AnimationPlayer
+		if player == null:
+			continue
+		var count := player.get_animation_list().size()
+		if count > best_count:
+			best = player
+			best_count = count
+	return best
+
+
+func _resolve_animation_clips() -> void:
+	var list := _anim.get_animation_list()
+	_clip_idle = _match_clip(list, ["idle_loop", "idle"], ["talking", "torch", "crouch", "pistol", "sword", "swim", "sit", "spell"])
+	# Prefer a true run; jog is the fallback if sprint is missing.
+	_clip_sprint = _match_clip(list, ["sprint_loop", "sprint"], ["walk", "crouch", "swim"])
+	_clip_run = _match_clip(list, ["sprint_loop", "sprint", "jog_fwd_loop", "jog_fwd", "jog", "run_loop", "run"], ["walk", "crouch", "swim"])
+	_clip_attack = _match_clip(list, ["punch_jab", "punch_cross", "sword_attack", "punch"], ["enter", "idle"])
+	_clip_death = _match_clip(list, ["death01", "death"], [])
+	if _clip_run == StringName():
+		_clip_run = _match_clip(list, ["walk_loop", "walk"], ["formal", "crouch"])
+
+
+func _match_clip(list: PackedStringArray, preferred: Array, exclude: Array) -> StringName:
+	for needle in preferred:
+		var needle_text := String(needle).to_lower()
+		for name in list:
+			var base := String(name).get_file().to_lower()
+			var skipped := false
+			for token in exclude:
+				if String(token) in base:
+					skipped = true
+					break
+			if skipped:
+				continue
+			if base == needle_text or base.begins_with(needle_text) or needle_text in base:
+				return StringName(name)
+	return StringName()
+
+
+func _clip_path(clip: String) -> StringName:
+	match clip:
+		ANIM_IDLE:
+			return _clip_idle
+		ANIM_WALK, ANIM_JOG:
+			return _clip_run
+		ANIM_SPRINT:
+			return _clip_sprint if _clip_sprint != StringName() else _clip_run
+		ANIM_ATTACK:
+			return _clip_attack
+		ANIM_DEATH:
+			return _clip_death
+	if _anim == null:
+		return StringName(clip)
+	if _anim.has_animation(clip):
+		return StringName(clip)
+	for lib in _anim.get_animation_library_list():
+		var path := String(lib)
+		var full := clip if path.is_empty() else "%s/%s" % [path, clip]
+		if _anim.has_animation(full):
+			return StringName(full)
+	return StringName(clip)
+
+
+func _play_clip(clip: String, blend: float, force: bool = false) -> bool:
+	if _anim == null:
+		return false
+	var path := _clip_path(clip)
+	if path == StringName() or not _anim.has_animation(path):
+		return false
+	if not force and _anim.current_animation == path and clip != ANIM_ATTACK:
+		return true
+	_anim.play(path, blend)
+	if force or clip == ANIM_ATTACK:
+		_anim.seek(0.0, true)
+	return true
+
+
+## Clears death pose / root motion and returns the mannequin to idle.
+func _reset_model_pose() -> bool:
+	_playing_action = false
+	_fall_progress = 0.0
+	if _pose_tween != null:
+		_pose_tween.kill()
+		_pose_tween = null
+	if _anim == null:
+		return false
+	_anim.stop(false)
+	var skeleton := find_child("Skeleton3D", true, false) as Skeleton3D
+	if skeleton != null:
+		skeleton.reset_bone_poses()
+	if _anim_root != null:
+		_anim_root.transform = _anim_root_rest
+	if _model != null:
+		_model.position = _model_rest_position
+		_model.basis = _model_rest_basis
+	return _play_clip(ANIM_IDLE, 0.0, true)
+
+
+func _on_animation_finished(_anim_name: StringName) -> void:
+	if is_dead:
+		return
+	_playing_action = false
+
+
+func _update_locomotion_animation(desired_velocity: Vector3) -> void:
+	if _anim == null or _playing_action or is_dead:
+		return
+	var moving := desired_velocity.length() > 0.15 \
+		or Vector3(velocity.x, 0.0, velocity.z).length() > 0.35
+	if not moving:
+		_play_clip(ANIM_IDLE, 0.2)
+		return
+	if _speed_buff_timer > 0.0:
+		_play_clip(ANIM_SPRINT, 0.15)
+	else:
+		_play_clip(ANIM_JOG, 0.15)
 
 
 ## Brings the player back where they died, at full health, with temporary invulnerability.
@@ -206,14 +449,120 @@ func respawn() -> void:
 	_invulnerable_timer = invulnerability_time
 
 
-## Movement speed including any active speed buff.
+## Experience needed to advance from `for_level` to the next level.
+## It grows with every level; at max level there is nothing left to earn.
+func xp_required(for_level: int) -> int:
+	if for_level >= max_level:
+		return 0
+	return maxi(int(round(xp_base * pow(for_level, xp_exponent))), 1)
+
+
+## Adds experience, leveling up as many times as the amount allows (up to max_level).
+func gain_experience(amount: int) -> void:
+	if amount <= 0 or is_dead or level >= max_level:
+		return
+
+	_spawn_floating_text("+%d XP" % amount, Color(1.0, 0.9, 0.4))
+	experience += amount
+
+	while level < max_level and experience >= xp_required(level):
+		experience -= xp_required(level)
+		level += 1
+		leveled_up.emit(level)
+		_spawn_floating_text("LEVEL %d!" % level, Color(1.0, 0.75, 0.2))
+
+	if level >= max_level:
+		experience = 0 # nothing further to earn
+
+	experience_changed.emit(level, experience, xp_required(level))
+
+
+## Movement speed: base + dexterity bonus, times any active speed buff.
 func current_move_speed() -> float:
-	return move_speed * (speed_buff_multiplier if _speed_buff_timer > 0.0 else 1.0)
+	var speed := move_speed + dexterity * move_speed_per_dexterity
+	return speed * (speed_buff_multiplier if _speed_buff_timer > 0.0 else 1.0)
 
 
-## Attack damage including any active damage buff.
+## Attack damage: base + strength bonus, times any active damage buff.
 func current_attack_damage() -> int:
-	return int(round(attack_damage * (damage_buff_multiplier if _damage_buff_timer > 0.0 else 1.0)))
+	var damage := attack_damage + strength * damage_per_strength
+	damage *= damage_buff_multiplier if _damage_buff_timer > 0.0 else 1.0
+	return maxi(int(round(damage)), 1)
+
+
+## Attack speed in attacks per second: base rate (1 / attack_cooldown) boosted by dexterity.
+func current_attack_speed() -> float:
+	return _attack_speed_multiplier() / attack_cooldown
+
+
+## Seconds between attacks after the dexterity bonus.
+func current_attack_cooldown() -> float:
+	return attack_cooldown / _attack_speed_multiplier()
+
+
+## Defense: base + intelligence bonus.
+func current_defense() -> float:
+	return base_defense + intelligence * defense_per_intelligence
+
+
+## Fraction of incoming damage that defense removes (0.0 to just under 1.0).
+func damage_reduction() -> float:
+	var defense := current_defense()
+	return defense / (defense + defense_scale) if defense > 0.0 else 0.0
+
+
+## All the player's current stats and attributes in one place (handy for UI).
+func get_stats() -> Dictionary:
+	return {
+		"health": health,
+		"max_health": max_health,
+		"defense": current_defense(),
+		"damage_reduction": damage_reduction(),
+		"move_speed": current_move_speed(),
+		"attack_speed": current_attack_speed(),
+		"damage": current_attack_damage(),
+		"strength": strength,
+		"dexterity": dexterity,
+		"intelligence": intelligence,
+	}
+
+
+## Adds attribute points. attribute: "strength", "dexterity" or "intelligence".
+func add_attribute(attribute: String, points: int = 1) -> void:
+	match attribute:
+		"strength":
+			strength += points
+		"dexterity":
+			dexterity += points
+		"intelligence":
+			intelligence += points
+		_:
+			push_warning("Unknown attribute: %s" % attribute)
+
+
+func _attack_speed_multiplier() -> float:
+	return maxf(1.0 + dexterity * attack_speed_per_dexterity, 0.1)
+
+
+func _on_attributes_changed() -> void:
+	# Setters also run while the scene loads, before _ready; ignore those.
+	if not _stats_ready:
+		return
+	_recalculate_max_health()
+
+
+## Recomputes max health from the base value and strength. Any extra max health also
+## heals the same amount; a lower maximum just clamps current health.
+func _recalculate_max_health() -> void:
+	var new_max := _base_max_health + int(round(strength * health_per_strength))
+	if new_max == max_health:
+		return
+	var difference := new_max - max_health
+	max_health = new_max
+	if not is_dead:
+		health = clampi(health + maxi(difference, 0), 1, max_health)
+	_update_health_label()
+	health_changed.emit(health, max_health)
 
 
 ## Doubles movement speed (by default) for buff_duration seconds. Re-collecting refreshes it.
@@ -291,12 +640,17 @@ func _set_glow_active(active: bool) -> void:
 
 ## Ignore all damage while the invulnerability window is active.
 func take_damage(amount: int) -> void:
-	if _invulnerable_timer > 0.0:
+	if _invulnerable_timer > 0.0 or amount <= 0:
 		return
-	super.take_damage(amount)
+	# Defense removes a share of the hit, but any hit still does at least 1 damage.
+	var reduced := maxi(int(round(amount * (1.0 - damage_reduction()))), 1)
+	super.take_damage(reduced)
 
 
 func _set_model_visible(show_model: bool) -> void:
+	if _anim_root != null:
+		_anim_root.visible = show_model
+		return
 	for child in get_children():
 		if child is MeshInstance3D:
 			child.visible = show_model
@@ -366,7 +720,9 @@ func _physics_process(delta: float) -> void:
 			rotation.y = lerp_angle(rotation.y, atan2(to_enemy.x, to_enemy.z), clampf(turn_speed * delta, 0.0, 1.0))
 			if _attack_timer <= 0.0:
 				_attack_target.take_damage(current_attack_damage())
-				_attack_timer = attack_cooldown
+				_attack_timer = current_attack_cooldown()
+				if _play_clip(ANIM_ATTACK, 0.08):
+					_playing_action = true
 	elif _has_target:
 		# Only consider horizontal distance so ground height doesn't affect arrival.
 		var to_target := _target_position - global_position
@@ -383,6 +739,7 @@ func _physics_process(delta: float) -> void:
 				desired_velocity = to_target.normalized() * max_step
 
 	_move_smoothed(desired_velocity, delta)
+	_update_locomotion_animation(desired_velocity)
 
 
 ## Decides what a click means: attack an enemy under the cursor, or move to the ground point.

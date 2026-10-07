@@ -13,6 +13,10 @@ extends Character
 ## Seconds between attacks.
 @export var attack_cooldown: float = 1.0
 
+@export_group("Rewards")
+## Experience the player earns for killing this enemy.
+@export var xp_reward: int = 20
+
 @export_group("Death")
 ## How long the enemy tips over, in seconds.
 @export var fall_duration: float = 0.5
@@ -76,6 +80,11 @@ func _die() -> void:
 	died.emit()
 	remove_from_group("enemies") # no longer counts toward spawn limits or click targets
 	set_physics_process(false)
+
+	# Reward the player (only the player kills enemies).
+	var killer := get_tree().get_first_node_in_group("player") as Player
+	if killer != null:
+		killer.gain_experience(xp_reward)
 
 	# Freeze in place: drop all momentum and take the body out of physics immediately,
 	# so nothing can nudge or push the corpse while it lies there.

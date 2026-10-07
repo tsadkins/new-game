@@ -1,18 +1,23 @@
 shader_type spatial;
-// Earthy ground with mottled dirt and a faint grid. Everything is computed from
-// world position, so the pattern stays fixed in the world and gives a sense of
-// where things are (and of motion) when the camera follows the player.
+// Grass field with rocky edges. UVs come from world XZ so the pattern stays planted
+// in the arena. A faint grid remains so movement still has spatial reference.
 
-uniform vec3 base_color : source_color = vec3(0.42, 0.31, 0.2);
-uniform vec3 line_color : source_color = vec3(0.26, 0.18, 0.11);
-// Size of one grid cell in world units.
+uniform sampler2D grass_albedo : source_color, repeat_enable;
+uniform sampler2D grass_normal : repeat_enable;
+uniform sampler2D rock_albedo : source_color, repeat_enable;
+uniform sampler2D rock_normal : repeat_enable;
+
+uniform vec3 grass_tint : source_color = vec3(0.72, 0.82, 0.62);
+uniform vec3 rock_tint : source_color = vec3(0.85, 0.82, 0.78);
+uniform float grass_uv_scale = 0.18;
+uniform float rock_uv_scale = 0.12;
+uniform float rock_start = 16.0;
+uniform float rock_end = 24.5;
 uniform float cell_size = 2.0;
-// Every Nth line is drawn stronger.
 uniform float major_every = 5.0;
-// Approximate line thickness in screen pixels.
-uniform float line_pixels = 1.5;
-uniform float minor_strength = 0.3;
-uniform float major_strength = 0.6;
+uniform float line_pixels = 1.2;
+uniform float minor_strength = 0.12;
+uniform float major_strength = 0.22;
 
 varying vec3 world_pos;
 
@@ -31,7 +36,6 @@ float value_noise(vec2 p) {
 	return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
 }
 
-// 1.0 on a grid line, fading to 0.0 away from it, with a width that stays constant on screen.
 float grid_line(vec2 coord) {
 	vec2 dist = abs(fract(coord - 0.5) - 0.5) / fwidth(coord);
 	return 1.0 - clamp(min(dist.x, dist.y) / line_pixels, 0.0, 1.0);
@@ -43,16 +47,26 @@ void vertex() {
 
 void fragment() {
 	vec2 p = world_pos.xz;
+	vec2 grass_uv = p * grass_uv_scale;
+	vec2 rock_uv = p * rock_uv_scale;
 
-	// Patchy dirt: large blotches, medium variation, and fine grain.
-	float n = value_noise(p * 0.35) * 0.5 + value_noise(p * 1.7) * 0.3 + value_noise(p * 9.0) * 0.2;
-	vec3 col = base_color * (0.78 + 0.44 * n);
+	vec3 grass = texture(grass_albedo, grass_uv).rgb * grass_tint;
+	vec3 rock = texture(rock_albedo, rock_uv).rgb * rock_tint;
+	float grass_rough = texture(grass_normal, grass_uv).a;
+	float rock_rough = texture(rock_normal, rock_uv).a;
+
+	float edge = max(abs(p.x), abs(p.y));
+	float n = value_noise(p * 0.12);
+	float rock_blend = smoothstep(rock_start, rock_end, edge + n * 2.5);
+
+	vec3 col = mix(grass, rock, rock_blend);
+	col *= 0.92 + 0.12 * value_noise(p * 0.55);
 
 	float minor = grid_line(p / cell_size);
 	float major = grid_line(p / (cell_size * major_every));
-	col = mix(col, line_color, minor * minor_strength);
-	col = mix(col, line_color, major * major_strength);
+	col = mix(col, col * 0.65, minor * minor_strength);
+	col = mix(col, col * 0.5, major * major_strength);
 
 	ALBEDO = col;
-	ROUGHNESS = 1.0;
+	ROUGHNESS = mix(grass_rough, rock_rough, rock_blend);
 }

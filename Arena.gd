@@ -9,6 +9,8 @@ extends Node3D
 ## Walls are built from segments this long, so only the part in the way fades.
 @export var segment_length: float = 10.0
 @export var wall_color: Color = Color(0.55, 0.5, 0.45, 1.0)
+## Optional rock material for the walls. Duplicated per segment so fade still works.
+@export var wall_material: Material
 ## Wall opacity while it is blocking the view (0 = invisible, 1 = solid).
 @export_range(0.0, 1.0) var faded_alpha: float = 0.15
 ## How fast walls fade in/out (alpha per second).
@@ -77,8 +79,12 @@ func _build_segment(pos: Vector3, size: Vector3, outward: Vector3) -> void:
 	shape.shape = box_shape
 	body.add_child(shape)
 
-	var material := StandardMaterial3D.new()
-	material.albedo_color = wall_color
+	var material: StandardMaterial3D
+	if wall_material is StandardMaterial3D:
+		material = (wall_material as StandardMaterial3D).duplicate()
+	else:
+		material = StandardMaterial3D.new()
+		material.albedo_color = wall_color
 	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_DEPTH_PRE_PASS
 
 	var box_mesh := BoxMesh.new()
@@ -116,7 +122,7 @@ func _process(delta: float) -> void:
 
 		if not is_equal_approx(segment.alpha, target_alpha):
 			segment.alpha = move_toward(segment.alpha, target_alpha, fade_speed * delta)
-			var color := wall_color
+			var color := segment.material.albedo_color
 			color.a = segment.alpha
 			segment.material.albedo_color = color
 

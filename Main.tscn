@@ -1,14 +1,25 @@
 [gd_scene format=3 uid="uid://cqow47bch5ocs"]
 
 [ext_resource type="Script" uid="uid://dpkjv2vdbcc4n" path="res://Player.gd" id="1_glv2v"]
-
 [ext_resource type="PackedScene" path="res://Enemy.tscn" id="2_enemy"]
-[ext_resource type="Script" path="res://CameraFollow.gd" id="3_camera"]
-[ext_resource type="Script" path="res://DeathScreen.gd" id="4_death"]
-[ext_resource type="Script" path="res://EnemySpawner.gd" id="5_spawner"]
-[ext_resource type="Script" path="res://Arena.gd" id="6_arena"]
-[ext_resource type="Script" path="res://PickupSpawner.gd" id="7_pickups"]
-[ext_resource type="Shader" path="res://Floor.gdshader" id="8_floorshader"]
+[ext_resource type="Script" uid="uid://c5nf1jywfki2k" path="res://CameraFollow.gd" id="3_camera"]
+[ext_resource type="Script" uid="uid://cbjtuvspxe3gf" path="res://DeathScreen.gd" id="4_death"]
+[ext_resource type="Script" uid="uid://c5b7i7m7xgfqc" path="res://EnemySpawner.gd" id="5_spawner"]
+[ext_resource type="Script" uid="uid://lkoax0vgl1pl" path="res://Arena.gd" id="6_arena"]
+[ext_resource type="Script" uid="uid://dpvi0e5f6cn2g" path="res://PickupSpawner.gd" id="7_pickups"]
+[ext_resource type="Shader" uid="uid://cjovy8r81a1nb" path="res://Floor.gdshader" id="8_floorshader"]
+[ext_resource type="Script" uid="uid://bf8dtfy5j4db5" path="res://HUD.gd" id="9_hud"]
+[ext_resource type="Texture2D" path="res://assets/textures/ground037_alb_ht.png" id="10_grass_alb"]
+[ext_resource type="Texture2D" path="res://assets/textures/ground037_nrm_rgh.png" id="11_grass_nrm"]
+[ext_resource type="Texture2D" path="res://assets/textures/rock023_alb_ht.png" id="12_rock_alb"]
+[ext_resource type="Texture2D" path="res://assets/textures/rock023_nrm_rgh.png" id="13_rock_nrm"]
+[ext_resource type="PackedScene" path="res://assets/models/RockA.tscn" id="14_rock_a"]
+[ext_resource type="PackedScene" path="res://assets/models/RockB.tscn" id="15_rock_b"]
+[ext_resource type="PackedScene" path="res://assets/models/RockC.tscn" id="16_rock_c"]
+[ext_resource type="PackedScene" path="res://assets/models/CrystalC.tscn" id="17_crystal"]
+[ext_resource type="Material" path="res://assets/materials/M_rock23_black_tp.tres" id="18_wall_mat"]
+[ext_resource type="Script" path="res://ArenaDecor.gd" id="19_decor"]
+[ext_resource type="PackedScene" path="res://Godot/AnimationLibrary_Godot_Standard.glb" id="20_mannequin"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_kosuo"]
 
@@ -21,18 +32,49 @@ material = SubResource("StandardMaterial3D_player")
 [sub_resource type="WorldBoundaryShape3D" id="WorldBoundaryShape3D_puuno"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_floor"]
+render_priority = 0
 shader = ExtResource("8_floorshader")
+shader_parameter/grass_albedo = ExtResource("10_grass_alb")
+shader_parameter/grass_normal = ExtResource("11_grass_nrm")
+shader_parameter/rock_albedo = ExtResource("12_rock_alb")
+shader_parameter/rock_normal = ExtResource("13_rock_nrm")
+shader_parameter/grass_tint = Color(0.72, 0.82, 0.62, 1)
+shader_parameter/rock_tint = Color(0.85, 0.82, 0.78, 1)
+shader_parameter/grass_uv_scale = 0.18
+shader_parameter/rock_uv_scale = 0.12
+shader_parameter/rock_start = 16.0
+shader_parameter/rock_end = 24.5
+shader_parameter/cell_size = 2.0
+shader_parameter/major_every = 5.0
+shader_parameter/line_pixels = 1.2
+shader_parameter/minor_strength = 0.12
+shader_parameter/major_strength = 0.22
 
 [sub_resource type="PlaneMesh" id="PlaneMesh_kosuo"]
 material = SubResource("ShaderMaterial_floor")
 size = Vector2(50, 50)
 
+[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_main"]
+sky_top_color = Color(0.192157, 0.282353, 0.509804, 1)
+sky_horizon_color = Color(0.55, 0.66, 0.75, 1)
+ground_bottom_color = Color(0.18, 0.22, 0.16, 1)
+ground_horizon_color = Color(0.50, 0.55, 0.42, 1)
+ground_curve = 0.08
+
+[sub_resource type="Sky" id="Sky_main"]
+sky_material = SubResource("ProceduralSkyMaterial_main")
+
 [sub_resource type="Environment" id="Environment_main"]
-background_mode = 1
-background_color = Color(0.2, 0.22, 0.28, 1)
-ambient_light_source = 2
-ambient_light_color = Color(0.7, 0.7, 0.8, 1)
-ambient_light_energy = 0.6
+background_mode = 2
+sky = SubResource("Sky_main")
+ambient_light_source = 3
+ambient_light_color = Color(0.55, 0.55, 0.55, 1)
+ambient_light_sky_contribution = 0.35
+tonemap_mode = 3
+fog_enabled = true
+fog_light_color = Color(0.62, 0.68, 0.72, 1)
+fog_density = 0.004
+fog_sky_affect = 0.4
 
 [node name="Node3D" type="Node3D" unique_id=2006659063]
 
@@ -47,14 +89,20 @@ target = NodePath("../Player")
 [node name="Player" type="CharacterBody3D" parent="." unique_id=31062412]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
 script = ExtResource("1_glv2v")
+acceleration = 500.0
 deceleration = 100.0
-turn_speed = 0.0
+turn_speed = 18.0
+liquid_fill_enabled = false
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Player" unique_id=2140572783]
 shape = SubResource("CapsuleShape3D_kosuo")
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="Player" unique_id=1920806043]
+visible = false
 mesh = SubResource("CapsuleMesh_kosuo")
+
+[node name="Mannequin" parent="Player" unique_id=1700000012 instance=ExtResource("20_mannequin")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1, 0)
 
 [node name="Enemy" parent="." unique_id=1700000003 instance=ExtResource("2_enemy")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 1, 6)
@@ -68,8 +116,11 @@ shape = SubResource("WorldBoundaryShape3D_puuno")
 mesh = SubResource("PlaneMesh_kosuo")
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=1700000001]
-transform = Transform3D(0.70710677, -0.40824828, 0.57735026, 0, 0.81649655, 0.57735026, -0.70710677, -0.40824828, 0.57735026, 0, 10, 0)
+transform = Transform3D(-0.866024, -0.433016, 0.250001, 0, 0.499998, 0.866026, -0.500003, 0.749999, -0.43301, 0, 10, 0)
 shadow_enabled = true
+shadow_blur = 2.0
+light_energy = 1.15
+light_color = Color(1.0, 0.96, 0.88, 1)
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1700000002]
 environment = SubResource("Environment_main")
@@ -80,6 +131,18 @@ player = NodePath("../Player")
 
 [node name="Arena" type="Node3D" parent="." unique_id=1700000008]
 script = ExtResource("6_arena")
+wall_material = ExtResource("18_wall_mat")
+
+[node name="ArenaDecor" type="Node3D" parent="." unique_id=1700000011]
+script = ExtResource("19_decor")
+rock_a_scene = ExtResource("14_rock_a")
+rock_b_scene = ExtResource("15_rock_b")
+rock_c_scene = ExtResource("16_rock_c")
+crystal_scene = ExtResource("17_crystal")
+
+[node name="HUD" type="CanvasLayer" parent="." unique_id=1700000010]
+script = ExtResource("9_hud")
+player = NodePath("../Player")
 
 [node name="PickupSpawner" type="Node" parent="." unique_id=1700000009]
 script = ExtResource("7_pickups")

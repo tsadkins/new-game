@@ -16,6 +16,7 @@ A running record of every prompt and what was done in response. New prompts are 
 | `Arena.gd` | Builds walls, fades near walls that block the view, clamps click targets |
 | `Pickup.gd` / `PickupSpawner.gd` | Heal / speed / damage buffs spawned around the arena |
 | `Floor.gdshader` | Earthy floor with mottled dirt and a faint world-space grid |
+| `HUD.gd` | Level label and experience bar (built in code) |
 | `sync-to-github.ps1` | Commits and pushes to GitHub; run daily at 4:30 PM by a scheduled task |
 | `CHAT_LOG.md` | This file |
 
@@ -161,6 +162,33 @@ A running record of every prompt and what was done in response. New prompts are 
 - **Runs only while the user is logged in**
 - Results are written to `sync.log`.
 
+### 39. Player level system
+**Prompt:** Add a player level system. Start each game at level 1, gain experience from kills toward the next level, max level 100, each level needing more experience than the last.
+
+**Done:**
+- `Player.gd`: `level` (starts at 1) and `experience`. `gain_experience(amount)` handles multiple level-ups from one reward and carries leftover XP over. At level 100 it stops awarding XP. Signals: `experience_changed`, `leveled_up`. Level and XP are kept across death and respawn.
+- XP curve: `xp_required(level) = round(xp_base * level ^ xp_exponent)` with `xp_base = 25` and `xp_exponent = 1.5`. It strictly increases with level: 25 (L1 to L2), 71 (L2), 130 (L3), 791 (L10), 8,839 (L50), 24,631 (L99). Exports: `max_level`, `xp_base`, `xp_exponent`.
+- `Enemy.gd`: new `xp_reward` export (20). Awards XP to the player when the enemy dies.
+- `HUD.gd` (new `HUD` node in `Main.tscn`): top-left "Level N" label and a gold XP bar with "XP x / y", or "MAX LEVEL" at the cap. It never blocks clicks.
+- Floating text above the player shows `+N XP` and `LEVEL N!` on a level-up.
+- Levels do not change any stats yet.
+
+### 40. Player stats and attributes
+**Prompt:** Create player stats (health, defense, movement speed, attack speed, damage) and three attributes: strength (health and damage), dexterity (movement speed and attack speed), intelligence (defense). The prompt was sent three times; it was handled once.
+
+**Done (`Player.gd`, `HUD.gd`):**
+- **Attributes:** `strength`, `dexterity`, `intelligence` exports (all start at 0, so gameplay is unchanged until points are added). `add_attribute(name, points)` adds points in code.
+- **Per-point scaling (exports under Stat Scaling):**
+  - Strength: +5 max health, +1 damage.
+  - Dexterity: +0.05 move speed, +1% attack speed.
+  - Intelligence: +1 defense.
+- **Stats:** max health, defense, move speed, attack speed (attacks/sec), damage. `get_stats()` returns them all.
+- **Defense:** damage taken is multiplied by `defense_scale / (defense_scale + defense)` with `defense_scale = 100`, so it never reaches 100% reduction. Any hit still does at least 1 damage.
+- **Health:** the `max_health` export on `Player.gd` is the base. Raising strength raises max health and heals the same amount; lowering it only clamps current health.
+- **Buffs** still multiply on top of the attribute-adjusted speed and damage.
+- **HUD:** a stats readout under the XP bar shows health, defense and damage reduction, move speed, attack speed, damage, and STR/DEX/INT.
+- Attribute points are not awarded or spendable in-game yet; use the Inspector or `add_attribute()`.
+
 ---
 
 ## Key tunables (quick reference)
@@ -178,3 +206,9 @@ A running record of every prompt and what was done in response. New prompts are 
 | Pickup spawn interval | `PickupSpawner.gd` | 20 s |
 | Enemy death linger | `Enemy.gd` | 1.5 s |
 | Arena half size | `Arena.gd` | 25 |
+| Max level / XP base / XP exponent | `Player.gd` | 100 / 25 / 1.5 |
+| XP per enemy kill | `Enemy.gd` | 20 |
+| Strength: health / damage per point | `Player.gd` | +5 / +1 |
+| Dexterity: move speed / attack speed per point | `Player.gd` | +0.05 / +1% |
+| Intelligence: defense per point | `Player.gd` | +1 |
+| Defense scale | `Player.gd` | 100 |
