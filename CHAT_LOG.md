@@ -16,6 +16,8 @@ A running record of every prompt and what was done in response. New prompts are 
 | `Arena.gd` | Builds walls, fades near walls that block the view, clamps click targets |
 | `Pickup.gd` / `PickupSpawner.gd` | Heal / speed / damage buffs spawned around the arena |
 | `Floor.gdshader` | Earthy floor with mottled dirt and a faint world-space grid |
+| `sync-to-github.ps1` | Commits and pushes to GitHub; run daily at 4:30 PM by a scheduled task |
+| `CHAT_LOG.md` | This file |
 
 ## Prompt history
 
@@ -132,12 +134,32 @@ A running record of every prompt and what was done in response. New prompts are 
 ### 34. Push to GitHub and sync daily at 4:30 PM Central
 **Prompt:** Add this project to `https://github.com/tsadkins/new-game.git` and sync it every day at 4:30 PM Central.
 
-**Status:** Local setup done; push is blocked. Daily task not scheduled yet.
+**Status:** Done. See entries 35 to 38 for how it got there.
 - Ran `git init` (branch `main`) and added `origin` pointing at the URL above.
-- The machine's global git identity was `daviddorr <ddorr@jpassessor.net>`, so the project uses its own identity instead: **Tyler Adkins <saintsfan349@gmail.com>** (repo-local only).
-- Made the first commit (30 files) and wrote `sync-to-github.ps1`, which commits any changes and pushes to `origin/main`, logging to `sync.log`.
-- `git push` fails with **"Repository not found"** and no sign-in prompt appeared. Either the repo doesn't exist at that URL, or it is private and this machine isn't signed in to the right GitHub account (the username in the URL is `tsadkins`; the Windows user is `tadkins`).
-- Next: once a push succeeds, register a Windows scheduled task for 4:30 PM daily running `sync-to-github.ps1`. The machine is already on Central Standard Time.
+- Wrote `sync-to-github.ps1`, which commits any changes and pushes to `origin/main`, logging to `sync.log` (git-ignored).
+- Registered a Windows scheduled task, `GodotProjectDailySync`, for 4:30 PM every day.
+
+### 35. Git identity
+**Prompt:** Provided name and email for commits (Tyler Adkins). The machine's global git identity belonged to someone else, so the identity is set for this repo only.
+**Done:** Made the first commit (30 files).
+
+### 36. "Not a git repository" error
+**Prompt:** Running the push in PowerShell said "not a git repository".
+**Result:** Confirmed `.git` exists at `C:\Users\tadkins\Documents\new-game-project`; the terminal was in the wrong folder. The user corrected this.
+
+### 37. "Repository not found" error
+**Prompt:** After fixing the folder, the push said "Repository not found".
+**Result:** Explained the likely causes (repo missing or misnamed, or a saved login for a different GitHub account).
+
+### 38. Repo made public, sign-in fixed
+**Prompt:** Repo made public and the saved login fixed in Windows Credential Manager; push now works.
+**Done:** Verified `main` matches `origin/main`. Registered the scheduled task:
+- **Name:** `GodotProjectDailySync`
+- **When:** every day at 4:30 PM (the machine is on Central Standard Time)
+- **Action:** `powershell.exe -File sync-to-github.ps1` in the project folder
+- **Missed runs:** if the computer is off or asleep at 4:30, it runs at the next opportunity
+- **Runs only while the user is logged in**
+- Results are written to `sync.log`.
 
 ---
 
