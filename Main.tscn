@@ -1,0 +1,89 @@
+[gd_scene format=3 uid="uid://cqow47bch5ocs"]
+
+[ext_resource type="Script" uid="uid://dpkjv2vdbcc4n" path="res://Player.gd" id="1_glv2v"]
+
+[ext_resource type="PackedScene" path="res://Enemy.tscn" id="2_enemy"]
+[ext_resource type="Script" path="res://CameraFollow.gd" id="3_camera"]
+[ext_resource type="Script" path="res://DeathScreen.gd" id="4_death"]
+[ext_resource type="Script" path="res://EnemySpawner.gd" id="5_spawner"]
+[ext_resource type="Script" path="res://Arena.gd" id="6_arena"]
+[ext_resource type="Script" path="res://PickupSpawner.gd" id="7_pickups"]
+[ext_resource type="Shader" path="res://Floor.gdshader" id="8_floorshader"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_kosuo"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_player"]
+albedo_color = Color(0.9, 0.3, 0.2, 1)
+
+[sub_resource type="CapsuleMesh" id="CapsuleMesh_kosuo"]
+material = SubResource("StandardMaterial3D_player")
+
+[sub_resource type="WorldBoundaryShape3D" id="WorldBoundaryShape3D_puuno"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_floor"]
+shader = ExtResource("8_floorshader")
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_kosuo"]
+material = SubResource("ShaderMaterial_floor")
+size = Vector2(50, 50)
+
+[sub_resource type="Environment" id="Environment_main"]
+background_mode = 1
+background_color = Color(0.2, 0.22, 0.28, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.7, 0.7, 0.8, 1)
+ambient_light_energy = 0.6
+
+[node name="Node3D" type="Node3D" unique_id=2006659063]
+
+[node name="Camera3D" type="Camera3D" parent="." unique_id=1457817700]
+transform = Transform3D(0.70710677, -0.40824828, 0.57735026, 0, 0.81649655, 0.57735026, -0.70710677, -0.40824828, 0.57735026, 10, 10, 10)
+projection = 1
+current = true
+size = 10.0
+script = ExtResource("3_camera")
+target = NodePath("../Player")
+
+[node name="Player" type="CharacterBody3D" parent="." unique_id=31062412]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+script = ExtResource("1_glv2v")
+deceleration = 100.0
+turn_speed = 0.0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Player" unique_id=2140572783]
+shape = SubResource("CapsuleShape3D_kosuo")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Player" unique_id=1920806043]
+mesh = SubResource("CapsuleMesh_kosuo")
+
+[node name="Enemy" parent="." unique_id=1700000003 instance=ExtResource("2_enemy")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 1, 6)
+
+[node name="Floor" type="StaticBody3D" parent="." unique_id=1760547353]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Floor" unique_id=1027590439]
+shape = SubResource("WorldBoundaryShape3D_puuno")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Floor" unique_id=1449984118]
+mesh = SubResource("PlaneMesh_kosuo")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=1700000001]
+transform = Transform3D(0.70710677, -0.40824828, 0.57735026, 0, 0.81649655, 0.57735026, -0.70710677, -0.40824828, 0.57735026, 0, 10, 0)
+shadow_enabled = true
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1700000002]
+environment = SubResource("Environment_main")
+
+[node name="DeathScreen" type="CanvasLayer" parent="." unique_id=1700000006]
+script = ExtResource("4_death")
+player = NodePath("../Player")
+
+[node name="Arena" type="Node3D" parent="." unique_id=1700000008]
+script = ExtResource("6_arena")
+
+[node name="PickupSpawner" type="Node" parent="." unique_id=1700000009]
+script = ExtResource("7_pickups")
+
+[node name="EnemySpawner" type="Node" parent="." unique_id=1700000007]
+script = ExtResource("5_spawner")
+enemy_scene = ExtResource("2_enemy")
