@@ -6,6 +6,8 @@ const SAVE_PATH := "user://player_items.save"
 
 var _save_queued: bool = false
 var _stash_save_bound: bool = false
+## One-time: old saves put iron sword / potions / bread in the bag. Move those to stash.
+var _moved_legacy_starter_from_bag: bool = false
 
 
 func _ready() -> void:
@@ -35,6 +37,7 @@ func save_now() -> void:
 		"inventory": PlayerInventory.save_to_player_data(),
 		"stash": stash.save_to_player_data() if stash != null else {},
 		"starter_kit_in_stash": true,
+		"moved_legacy_starter_from_bag": _moved_legacy_starter_from_bag,
 	}
 	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if file == null:
@@ -57,6 +60,7 @@ func load_now() -> bool:
 	var stash := _stash()
 	if stash != null:
 		stash.load_from_player_data(player_data.get("stash", {}))
+	_moved_legacy_starter_from_bag = bool(player_data.get("moved_legacy_starter_from_bag", false))
 	return true
 
 
@@ -64,12 +68,27 @@ func _load_or_start() -> void:
 	await _wait_for_stash()
 	_bind_stash_save()
 	if load_now():
+		_migrate_starter_kit_out_of_bag()
+		save_now()
 		return
 	_apply_first_run_starter_kit()
+	_moved_legacy_starter_from_bag = true
 	save_now()
 
 
+func _migrate_starter_kit_out_of_bag() -> void:
+	if _moved_legacy_starter_from_bag:
+		return
+	var taken := PlayerInventory.take_starter_kit_from_bag()
+	var stash := _stash()
+	if stash != null:
+		for inst in taken:
+			stash.add_item(inst)
+	_moved_legacy_starter_from_bag = true
+
+
 func _apply_first_run_starter_kit() -> void:
+	# Bag stays empty. All starter gear goes into the stash chest.
 	PlayerInventory.ensure_empty_start()
 	var kit := StarterKitData.load_kit()
 	if not kit.stash_only:

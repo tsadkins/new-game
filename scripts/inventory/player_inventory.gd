@@ -202,9 +202,31 @@ func ensure_empty_start() -> void:
 	inventory_changed.emit()
 
 
-## Kept so old call sites compile. Starter kit is granted into the stash by SaveSystem.
+## Starter kit must never be added to the bag. SaveSystem puts it in the stash.
 func grant_starter_kit() -> void:
-	ensure_empty_start()
+	pass
+
+
+## Pulls starter-kit stacks out of the bag (unequips first) so they can go to stash.
+func take_starter_kit_from_bag() -> Array[ItemInstance]:
+	var kit := StarterKitData.load_kit()
+	var taken: Array[ItemInstance] = []
+	for item_id in kit.item_ids:
+		_unequip_item_id(str(item_id))
+		while true:
+			var inst := take_item(str(item_id), 9999)
+			if inst == null:
+				break
+			taken.append(inst)
+	return taken
+
+
+func _unequip_item_id(item_id: String) -> void:
+	var slots: Array = equipped_items.keys()
+	for slot in slots:
+		var inst := get_equipped_item(str(slot))
+		if inst != null and inst.item_id == item_id:
+			unequip_item(str(slot))
 
 
 func _find_key(item_id: String) -> String:
