@@ -16,6 +16,8 @@ var _catalog_grid: GridContainer
 var _stash_grid: GridContainer
 var _equip_grid: GridContainer
 var _status: Label
+var _ui_root: Control
+var _modal: Control
 var _selected_id: String = ""
 
 
@@ -55,6 +57,8 @@ func refresh_all() -> void:
 	_fill_stash()
 	_fill_equipment()
 	_update_status()
+	if _modal != null and _modal.visible and _modal.has_method("refresh_from_database"):
+		_modal.call("refresh_from_database")
 
 
 func load_all_items() -> Array:
@@ -198,20 +202,14 @@ func _make_card(
 	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	card.custom_minimum_size = Vector2(240, 168)
 	card.add_theme_stylebox_override("panel", style)
-
-	var btn := Button.new()
-	btn.flat = true
-	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	btn.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	btn.pressed.connect(func() -> void:
-		_selected_id = item_id
-		item_selected.emit(item_id)
-		refresh_all()
+	card.mouse_filter = Control.MOUSE_FILTER_STOP
+	card.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	card.gui_input.connect(func(event: InputEvent) -> void:
+		if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+			_on_card_clicked(item_id)
 	)
-	card.add_child(btn)
 
 	var body := VBoxContainer.new()
-	body.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	body.add_theme_constant_override("separation", 6)
 	card.add_child(body)
 
@@ -265,7 +263,36 @@ func _make_card(
 	stats.add_theme_color_override("font_color", Color(0.88, 0.88, 0.9))
 	stats.text = _stats_line(type, base_damage, defense, health_restore, mana_restore, weight, sell_value)
 	body.add_child(stats)
+	_ignore_mouse_recursive(body)
 	return card
+
+
+func _on_card_clicked(item_id: String) -> void:
+	_selected_id = item_id
+	item_selected.emit(item_id)
+	_update_status()
+	_show_item_detail(item_id)
+
+
+func _show_item_detail(item_id: String) -> void:
+	if _modal == null:
+		var packed := load("res://scenes/ui/item_detail_modal.tscn") as PackedScene
+		if packed == null:
+			push_error("Item Viewer: missing res://scenes/ui/item_detail_modal.tscn")
+			return
+		_modal = packed.instantiate() as Control
+		_ui_root.add_child(_modal)
+	if _modal.has_method("open_item"):
+		_modal.call("open_item", item_id)
+	elif _modal.has_method("load_item_data"):
+		_modal.call("load_item_data", item_id)
+
+
+func _ignore_mouse_recursive(node: Node) -> void:
+	if node is Control:
+		(node as Control).mouse_filter = Control.MOUSE_FILTER_IGNORE
+	for child in node.get_children():
+		_ignore_mouse_recursive(child)
 
 
 func _stats_line(
@@ -370,11 +397,12 @@ func _clear(grid: GridContainer) -> void:
 
 
 func _build() -> void:
-	var root := Control.new()
-	root.set_anchors_preset(Control.PRESET_FULL_RECT)
-	root.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	root.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	add_child(root)
+	_ui_root = Control.new()
+	_ui_root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_ui_root.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_ui_root.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	add_child(_ui_root)
+	var root := _ui_root
 
 	var bg := ColorRect.new()
 	bg.color = Color(0.05, 0.06, 0.08, 0.96)
