@@ -19,6 +19,9 @@ var _collected: bool = false
 
 
 func _ready() -> void:
+	if StarterKitData.load_kit().should_skip_ground_spawn(item_id):
+		queue_free()
+		return
 	monitoring = true
 	monitorable = false
 	collision_layer = 0

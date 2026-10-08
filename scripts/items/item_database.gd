@@ -62,6 +62,9 @@ func _load_tres_folder(folder: String) -> void:
 	var file_name := dir.get_next()
 	while file_name != "":
 		if not dir.current_is_dir() and file_name.ends_with(".tres"):
+			if file_name == "starter_kit_data.tres":
+				file_name = dir.get_next()
+				continue
 			var res := load(folder.path_join(file_name)) as ItemDefinition
 			if res != null:
 				register_item(res)

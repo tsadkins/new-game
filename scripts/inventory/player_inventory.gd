@@ -196,12 +196,15 @@ func load_from_player_data(data: Dictionary) -> void:
 	inventory_changed.emit()
 
 
+func ensure_empty_start() -> void:
+	current_items.clear()
+	equipped_items.clear()
+	inventory_changed.emit()
+
+
+## Kept so old call sites compile. Starter kit is granted into the stash by SaveSystem.
 func grant_starter_kit() -> void:
-	if not current_items.is_empty():
-		return
-	add_item(ItemInstance.new("sword_iron", 1))
-	add_item(ItemInstance.new("potion_health_small", 2))
-	add_item(ItemInstance.new("bread", 3))
+	ensure_empty_start()
 
 
 func _find_key(item_id: String) -> String:

@@ -1,5 +1,6 @@
 extends Node
 ## Spawns a random buff pickup somewhere in the arena on a repeating timer.
+## Does not spawn starter-kit items. Those live in the stash on a new game.
 
 ## Seconds between spawns.
 @export var spawn_interval: float = 20.0
@@ -7,11 +8,18 @@ extends Node
 @export var arena_half_size: float = 22.0
 ## Height above the floor the pickup floats at.
 @export var spawn_height: float = 0.8
+## Starter kit (swords, armor, potions, bread) must not appear on the ground.
+@export var skip_starter_spawning: bool = true
 var _timer: Timer
 var _live_pickups: Array = []
 
 
+func should_skip_starter_spawning() -> bool:
+	return skip_starter_spawning
+
+
 func _ready() -> void:
+	# Buff orbs only. Starter kit items are granted into the stash by SaveSystem.
 	_timer = Timer.new()
 	_timer.wait_time = spawn_interval
 	_timer.one_shot = false

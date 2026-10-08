@@ -22,7 +22,6 @@
 [ext_resource type="PackedScene" path="res://scenes/world/stash_chest.tscn" id="21_stash"]
 [ext_resource type="PackedScene" path="res://scenes/ui/inventory_ui.tscn" id="22_inv_ui"]
 [ext_resource type="PackedScene" path="res://scenes/ui/stash_ui.tscn" id="23_stash_ui"]
-[ext_resource type="PackedScene" path="res://scenes/world/item_pickup.tscn" id="24_item"]
 
 [sub_resource type="WorldBoundaryShape3D" id="WorldBoundaryShape3D_puuno"]
 
@@ -135,18 +134,3 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, 0, -8)
 [node name="InventoryUI" parent="." instance=ExtResource("22_inv_ui")]
 
 [node name="StashUI" parent="." instance=ExtResource("23_stash_ui")]
-
-[node name="ItemPickupSword" parent="." instance=ExtResource("24_item")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6, 0.4, -8)
-item_id = "sword_steel"
-count = 1
-
-[node name="ItemPickupPotion" parent="." instance=ExtResource("24_item")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, 0.4, -6)
-item_id = "potion_mana"
-count = 2
-
-[node name="ItemPickupArmor" parent="." instance=ExtResource("24_item")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -10, 0.4, -8)
-item_id = "chestplate_chain"
-count = 1

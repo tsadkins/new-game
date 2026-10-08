@@ -20,7 +20,7 @@ config/icon="res://icon.svg"
 ItemDatabase="*res://scripts/items/item_database.gd"
 PlayerInventory="*res://scripts/inventory/player_inventory.gd"
 SaveSystem="*res://scripts/core/save_system.gd"
-ItemRegistry="*uid://dt2bgl6bbwgrs"
+ItemRegistry="*res://scripts/items/item_registry.gd"
 
 [display]
 
