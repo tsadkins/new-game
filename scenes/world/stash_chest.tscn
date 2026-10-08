@@ -1,0 +1,15 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/world/stash_container.gd" id="1_stash"]
+[ext_resource type="Script" path="res://scripts/world/stash_interaction.gd" id="2_interact"]
+
+[node name="StashChest" type="Node3D"]
+process_mode = 3
+script = ExtResource("1_stash")
+max_stash_size = 100
+open_animation_duration = 0.35
+
+[node name="StashInteraction" type="Area3D" parent="."]
+script = ExtResource("2_interact")
+stash_container = NodePath("..")
+interaction_radius = 2.4

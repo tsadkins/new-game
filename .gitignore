@@ -2,5 +2,14 @@
 .godot/
 /android/
 
+# Editor lock copies of native plugin DLLs
+addons/terrain_3d/bin/~*
+
 # Local sync log
 sync.log
+
+# Captured user data (keep folder structure)
+user_data/savegames/*
+!user_data/savegames/.gitkeep
+user_data/screenshots/*
+!user_data/screenshots/.gitkeep

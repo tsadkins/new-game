@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="ItemDefinition" format=3 uid="uid://dl8ccdyhp2ma"]
+
+[ext_resource type="Script" uid="uid://ugufick5dj80" path="res://scripts/items/item_definition.gd" id="1_def"]
+
+[resource]
+script = ExtResource("1_def")
+item_id = "sword_iron"
+item_name = "Iron Sword"
+description = "A plain iron blade. Reliable, nothing fancy."
+type = "weapon"
+base_damage = 15.0
+weight = 3.0
+icon_path = "res://assets/textures/items/iron_sword.png"
+equip_slot = "main_hand"
+sell_value = 12.0

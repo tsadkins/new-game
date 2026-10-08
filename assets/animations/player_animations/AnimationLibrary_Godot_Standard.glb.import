@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://bmrl45rmcleiw"
-path="res://.godot/imported/AnimationLibrary_Godot_Standard.glb-701c3948743f38c5d83d9dbe5e82fe9e.scn"
+uid="uid://bnmasj3skbtak"
+path="res://.godot/imported/AnimationLibrary_Godot_Standard.glb-f9e07a9665fcc7d871214dd67610c47b.scn"
 
 [deps]
 
-source_file="res://Godot/AnimationLibrary_Godot_Standard.glb"
-dest_files=["res://.godot/imported/AnimationLibrary_Godot_Standard.glb-701c3948743f38c5d83d9dbe5e82fe9e.scn"]
+source_file="res://assets/animations/player_animations/AnimationLibrary_Godot_Standard.glb"
+dest_files=["res://.godot/imported/AnimationLibrary_Godot_Standard.glb-f9e07a9665fcc7d871214dd67610c47b.scn"]
 
 [params]
 
