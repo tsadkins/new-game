@@ -14,6 +14,8 @@ var _badges: HBoxContainer
 var _stats: VBoxContainer
 var _desc: Label
 var _item_id: String = ""
+var _item_context: String = "inventory"
+var _back_btn: Button
 var _closing: bool = false
 var _tween: Tween
 
@@ -39,8 +41,9 @@ func load_item_data(item_id: String) -> void:
 	open_item(item_id)
 
 
-func open_item(item_id: String) -> void:
+func open_item(item_id: String, context: String = "inventory") -> void:
 	_item_id = item_id
+	_item_context = context
 	refresh_from_database()
 	_closing = false
 	visible = true
@@ -94,6 +97,10 @@ func _apply_definition(def: ItemDefinition) -> void:
 	_clear_box(_badges)
 	_badges.add_child(_badge(_type_label(def.type), _type_color(def.type)))
 	_badges.add_child(_badge(def.rarity.capitalize(), _rarity_color(def.rarity)))
+	if not _item_context.is_empty() and _item_context != "viewer":
+		_badges.add_child(_badge("[ %s ]" % _item_context.capitalize(), Color(0.38, 0.40, 0.46)))
+	if _back_btn != null:
+		_back_btn.text = "Back to Viewer" if _item_context == "viewer" else "Close"
 	_clear_box(_stats)
 	for line in _stat_lines(def):
 		var lbl := Label.new()
@@ -214,10 +221,10 @@ func _build() -> void:
 	_desc.add_theme_color_override("font_color", Color(0.68, 0.70, 0.74))
 	vbox.add_child(_desc)
 
-	var back := Button.new()
-	back.text = "Back to Viewer"
-	back.pressed.connect(close)
-	vbox.add_child(back)
+	_back_btn = Button.new()
+	_back_btn.text = "Close"
+	_back_btn.pressed.connect(close)
+	vbox.add_child(_back_btn)
 
 
 func _on_backdrop_gui_input(event: InputEvent) -> void:

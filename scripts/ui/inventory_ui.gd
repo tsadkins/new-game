@@ -12,6 +12,7 @@ var _equip_labels: Dictionary = {}
 var _status: Label
 var _selected_id: String = ""
 var _root: Control
+var _modal: Control
 
 const EQUIP_SLOTS: Array[String] = [
 	"main_hand", "off_hand", "head", "chest", "legs", "boots", "ring", "amulet"
@@ -58,6 +59,8 @@ func _input(event: InputEvent) -> void:
 		get_tree().paused = visible
 		if visible:
 			update_inventory()
+		else:
+			_hide_detail_modal()
 		get_viewport().set_input_as_handled()
 
 
@@ -67,7 +70,7 @@ func update_inventory() -> void:
 		return
 	_refresh_grid()
 	refresh_equipment_panel()
-	_status.text = "Inventory %d / %d slots  (click: select, U: use, Q: equip)" % [
+	_status.text = "Inventory %d / %d slots  (click: details, U: use, Q: equip)" % [
 		bag.slot_count(), bag.max_inventory_size
 	]
 
@@ -100,6 +103,8 @@ func refresh_equipment_panel() -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not visible:
+		return
+	if _modal != null and _modal.visible:
 		return
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_U:
@@ -183,7 +188,10 @@ func _make_item_slot(key: String) -> PanelContainer:
 		title = "[E] " + title
 	btn.text = title
 	btn.clip_text = true
-	btn.pressed.connect(func() -> void: on_item_selected(inst))
+	btn.pressed.connect(func() -> void:
+		on_item_selected(inst)
+		_show_item_detail(inst.item_id, "inventory")
+	)
 	vbox.add_child(btn)
 
 	if inst.count > 1:
@@ -206,6 +214,37 @@ func _make_empty_slot() -> PanelContainer:
 	lbl.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	slot.add_child(lbl)
 	return slot
+
+
+func _on_equip_label_clicked(slot: String) -> void:
+	var bag := _bag()
+	if bag == null:
+		return
+	var inst: ItemInstance = bag.get_equipped_item(slot)
+	if inst == null:
+		return
+	_show_item_detail(inst.item_id, "equipment")
+
+
+func _show_item_detail(item_id: String, context: String = "inventory") -> void:
+	if item_id.is_empty():
+		return
+	if _modal == null or not is_instance_valid(_modal):
+		var packed := load("res://scenes/ui/item_detail_modal.tscn") as PackedScene
+		if packed == null:
+			push_error("InventoryUI: missing item_detail_modal.tscn")
+			return
+		_modal = packed.instantiate() as Control
+		_root.add_child(_modal)
+	if _modal.has_method("open_item"):
+		_modal.call("open_item", item_id, context)
+	elif _modal.has_method("load_item_data"):
+		_modal.call("load_item_data", item_id)
+
+
+func _hide_detail_modal() -> void:
+	if _modal != null and is_instance_valid(_modal) and _modal.visible and _modal.has_method("close"):
+		_modal.call("close")
 
 
 func _slot_panel(selected: bool) -> PanelContainer:
@@ -264,12 +303,20 @@ func _build() -> void:
 	vbox.add_child(equip)
 	for slot in EQUIP_SLOTS:
 		var lbl := Label.new()
+		lbl.mouse_filter = Control.MOUSE_FILTER_STOP
+		lbl.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		var slot_name := slot
+		lbl.gui_input.connect(func(event: InputEvent) -> void:
+			if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+				_on_equip_label_clicked(slot_name)
+		)
 		_equip_labels[slot] = lbl
 		equip.add_child(lbl)
 
 	var close := Button.new()
 	close.text = "Close (I / Esc)"
 	close.pressed.connect(func() -> void:
+		_hide_detail_modal()
 		visible = false
 		get_tree().paused = false
 	)

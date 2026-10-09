@@ -13,6 +13,7 @@ var _grid: GridContainer
 var _bag_grid: GridContainer
 var _summary: Label
 var _root: Control
+var _modal: Control
 
 
 func _bag() -> Node:
@@ -106,7 +107,7 @@ func update_inventory_summary() -> void:
 	var stash_used := 0
 	if _stash != null:
 		stash_used = _stash.current_items.size()
-		_summary.text = "Player inventory: %d/%d   Stash: %d/%d  (click a stash item to take it)" % [
+		_summary.text = "Player inventory: %d/%d   Stash: %d/%d  (left-click: details, right-click: move)" % [
 			bag.slot_count() if bag else 0,
 			bag.max_inventory_size if bag else 0,
 			stash_used,
@@ -171,6 +172,7 @@ func _on_stash_closed() -> void:
 
 
 func _hide_ui() -> void:
+	_hide_detail_modal()
 	visible = false
 	if get_tree().paused:
 		get_tree().paused = false
@@ -203,7 +205,11 @@ func _make_bag_slot(key: String) -> PanelContainer:
 	if inst.count > 1:
 		title = "%s x%d" % [title, inst.count]
 	btn.text = title
-	btn.pressed.connect(func() -> void: _send_to_stash(key))
+	btn.pressed.connect(func() -> void: _show_item_detail(inst.item_id, "inventory"))
+	btn.gui_input.connect(func(event: InputEvent) -> void:
+		if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_RIGHT:
+			_send_to_stash(key)
+	)
 	slot.add_child(btn)
 	return slot
 
@@ -240,9 +246,44 @@ func _make_item_slot(key: String) -> PanelContainer:
 		title = "%s x%d" % [title, inst.count]
 	btn.text = title
 	btn.clip_text = true
-	btn.pressed.connect(func() -> void: _take_from_stash(key))
+	btn.pressed.connect(func() -> void: _show_item_detail(inst.item_id, "stash"))
+	btn.gui_input.connect(func(event: InputEvent) -> void:
+		if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_RIGHT:
+			_take_from_stash(key)
+	)
 	slot.add_child(btn)
 	return slot
+
+
+func _show_item_detail(item_id: String, context: String = "stash") -> void:
+	if item_id.is_empty():
+		return
+	if _modal == null or not is_instance_valid(_modal):
+		var packed := load("res://scenes/ui/item_detail_modal.tscn") as PackedScene
+		if packed == null:
+			push_error("StashUI: missing item_detail_modal.tscn")
+			return
+		_modal = packed.instantiate() as Control
+		_root.add_child(_modal)
+	if _modal.has_method("open_item"):
+		_modal.call("open_item", item_id, context)
+	elif _modal.has_method("load_item_data"):
+		_modal.call("load_item_data", item_id)
+
+
+func _hide_detail_modal() -> void:
+	if _modal != null and is_instance_valid(_modal) and _modal.visible and _modal.has_method("close"):
+		_modal.call("close")
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if not visible:
+		return
+	if _modal != null and _modal.visible:
+		return
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
+		on_close_button_pressed()
+		get_viewport().set_input_as_handled()
 
 
 func _empty_slot() -> PanelContainer:
@@ -309,7 +350,7 @@ func _build() -> void:
 	vbox.add_child(_summary)
 
 	var bag_title := Label.new()
-	bag_title.text = "Your bag (click to store)"
+	bag_title.text = "Your bag (left-click: details, right-click: store)"
 	vbox.add_child(bag_title)
 	_bag_grid = GridContainer.new()
 	_bag_grid.columns = 5

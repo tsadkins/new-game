@@ -283,7 +283,7 @@ func _show_item_detail(item_id: String) -> void:
 		_modal = packed.instantiate() as Control
 		_ui_root.add_child(_modal)
 	if _modal.has_method("open_item"):
-		_modal.call("open_item", item_id)
+		_modal.call("open_item", item_id, "viewer")
 	elif _modal.has_method("load_item_data"):
 		_modal.call("load_item_data", item_id)
 
