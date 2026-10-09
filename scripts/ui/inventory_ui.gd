@@ -25,8 +25,11 @@ func _bag() -> Node:
 
 
 func _ready() -> void:
-	visible = false
-	print("InventoryUI: deprecated. Use the Gear screen (C).")
+	layer = 12
+	process_mode = Node.PROCESS_MODE_ALWAYS
+	_build()
+	visible = get_tree().current_scene == self
+	_connect_bag_signals()
 
 
 func _connect_bag_signals() -> void:

@@ -22,6 +22,7 @@ var _gear_panel: Control  # HBoxContainer wrapper that holds both sub-panels
 var _gear_open: bool = false
 var _inventory_grid: GridContainer
 var _gear_item_labels: Dictionary = {}
+var _detail_modal: Control
 
 
 func _ready() -> void:
@@ -31,7 +32,7 @@ func _ready() -> void:
 	_build_ui()
 	_build_levelup_popup()
 	_build_gear_menu()
-	PlayerInventory.inventory_changed.connect(_refresh_gear_inventory)
+	PlayerInventory.inventory_changed.connect(_refresh_gear_inventory, CONNECT_DEFERRED)
 	_refresh_gear_inventory()
 
 	if player == null:
@@ -104,17 +105,28 @@ func _process(_delta: float) -> void:
 		"Damage: %d" % s.damage,
 		"",
 		"STR %d   DEX %d   INT %d" % [s.strength, s.dexterity, s.intelligence],
-		"C Gear   E Stash",
+		"I Gear   C Database   E Stash",
 	])
 
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
-		if event.keycode == KEY_C:
-			# ItemViewer owns C. Block it only while a level-up choice is pending.
+		if event.keycode == KEY_I:
+			if _pending_levels > 0:
+				get_viewport().set_input_as_handled()
+				return
+			_toggle_gear_menu()
+			get_viewport().set_input_as_handled()
+		elif event.keycode == KEY_C:
+			# ItemViewer owns C (database/stash/equipment tabs).
 			if _pending_levels > 0:
 				get_viewport().set_input_as_handled()
 			return
+		elif event.keycode == KEY_ESCAPE and _gear_open:
+			if _detail_modal != null and _detail_modal.visible:
+				return
+			_toggle_gear_menu()
+			get_viewport().set_input_as_handled()
 
 
 func _on_experience_changed(level: int, experience: int, required: int) -> void:
@@ -347,7 +359,13 @@ func _make_gear_slot(slot_name: String, icon: String, equip_id: String) -> Panel
 	panel.add_theme_stylebox_override("panel", style)
 	panel.custom_minimum_size = Vector2(0, 56)
 	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	panel.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	var slot_id := equip_id
+	panel.gui_input.connect(func(event: InputEvent) -> void:
+		if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+			_on_gear_slot_clicked(slot_id)
+	)
 
 	var hbox := HBoxContainer.new()
 	hbox.add_theme_constant_override("separation", 10)
@@ -556,8 +574,10 @@ func _toggle_gear_menu() -> void:
 	if _gear_open:
 		get_tree().paused = true
 		_refresh_gear_inventory()
-	elif _pending_levels == 0:
-		get_tree().paused = false
+	else:
+		_hide_detail_modal()
+		if _pending_levels == 0:
+			get_tree().paused = false
 
 
 func _refresh_gear_inventory() -> void:
@@ -565,7 +585,7 @@ func _refresh_gear_inventory() -> void:
 		return
 	for child in _inventory_grid.get_children():
 		_inventory_grid.remove_child(child)
-		child.free()
+		child.queue_free()
 	var keys: Array = PlayerInventory.current_items.keys()
 	keys.sort()
 	var slot_total: int = maxi(PlayerInventory.max_inventory_size, 20)
@@ -606,4 +626,42 @@ func _make_filled_inventory_slot(key: String) -> PanelContainer:
 	lbl.text = title
 	lbl.add_theme_color_override("font_color", def.rarity_color() if def else Color(0.9, 0.9, 0.92))
 	lbl.add_theme_font_size_override("font_size", 10)
+	slot.mouse_filter = Control.MOUSE_FILTER_STOP
+	slot.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	var item_id := inst.item_id
+	slot.gui_input.connect(func(event: InputEvent) -> void:
+		if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+			_show_item_detail(item_id, "inventory")
+	)
 	return slot
+
+
+func _on_gear_slot_clicked(equip_id: String) -> void:
+	if equip_id.is_empty():
+		return
+	var inst := PlayerInventory.get_equipped_item(equip_id)
+	if inst == null:
+		return
+	_show_item_detail(inst.item_id, "equipment")
+
+
+func _show_item_detail(item_id: String, context: String = "inventory") -> void:
+	if item_id.is_empty():
+		return
+	if _detail_modal == null or not is_instance_valid(_detail_modal):
+		var packed := load("res://scenes/ui/item_detail_modal.tscn") as PackedScene
+		if packed == null:
+			push_error("HUD: missing item_detail_modal.tscn")
+			return
+		_detail_modal = packed.instantiate() as Control
+		add_child(_detail_modal)
+	if _detail_modal.has_method("open_item"):
+		_detail_modal.call("open_item", item_id, context)
+	elif _detail_modal.has_method("load_item_data"):
+		_detail_modal.call("load_item_data", item_id)
+
+
+func _hide_detail_modal() -> void:
+	if _detail_modal != null and is_instance_valid(_detail_modal) and _detail_modal.visible:
+		if _detail_modal.has_method("close"):
+			_detail_modal.call("close")
