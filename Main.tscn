@@ -1,6 +1,8 @@
 [gd_scene format=3 uid="uid://becgdypu0jdt"]
 
 [ext_resource type="PackedScene" uid="uid://bmrl45rmcleiw" path="res://Godot/AnimationLibrary_Godot_Standard.glb" id="20_mannequin"]
+[ext_resource type="PackedScene" path="res://scenes/world/stash_chest.tscn" id="21_stash"]
+[ext_resource type="PackedScene" path="res://scenes/ui/stash_ui.tscn" id="23_stash_ui"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_kosuo"]
 
@@ -90,3 +92,8 @@ environment = SubResource("Environment_main")
 [node name="PickupSpawner" type="Node" parent="." unique_id=1700000009]
 
 [node name="EnemySpawner" type="Node" parent="." unique_id=1700000007]
+
+[node name="StashChest" parent="." unique_id=1700000013 instance=ExtResource("21_stash")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 0, 4)
+
+[node name="StashUI" parent="." unique_id=1700000014 instance=ExtResource("23_stash_ui")]

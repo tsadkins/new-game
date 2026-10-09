@@ -129,7 +129,7 @@ script = ExtResource("5_spawner")
 enemy_scene = ExtResource("2_enemy")
 
 [node name="StashChest" parent="." instance=ExtResource("21_stash")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, 0, -8)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 0, 4)
 
 [node name="ItemViewer" parent="." instance=ExtResource("22_viewer")]
 
