@@ -1,6 +1,6 @@
 extends CanvasLayer
-## Gameplay inventory (I) plus catalog, stash, and equipment tabs.
-## F6 this scene to browse the database without running the arena.
+## Gear screen (C): bag, equipment, stash, and item database.
+## F6 this scene to browse without running the arena.
 
 signal item_selected(item_id: String)
 
@@ -37,6 +37,7 @@ func _bag() -> Node:
 func _ready() -> void:
 	layer = 12
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	add_to_group("item_viewer")
 	_build()
 	_connect_live_updates()
 	visible = get_tree().current_scene == self
@@ -94,7 +95,7 @@ func _stash() -> Node:
 
 
 func _input(event: InputEvent) -> void:
-	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_I:
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_C:
 		_toggle()
 		get_viewport().set_input_as_handled()
 
@@ -543,7 +544,7 @@ func _build() -> void:
 	vbox.add_child(header)
 
 	var title := Label.new()
-	title.text = "Inventory"
+	title.text = "Gear"
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	title.add_theme_font_size_override("font_size", 28)
 	title.add_theme_color_override("font_color", Color.WHITE)

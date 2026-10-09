@@ -1,6 +1,5 @@
 extends CanvasLayer
-## Deprecated. Gameplay inventory is Item Viewer (I) in scenes/main.tscn.
-## Keep this scene for reference; do not instance it alongside ItemViewer.
+## Deprecated. Gear/inventory is Item Viewer (C). Do not instance this in main.
 
 const BAG_PATH := "/root/PlayerInventory"
 
@@ -26,12 +25,8 @@ func _bag() -> Node:
 
 
 func _ready() -> void:
-	layer = 12
-	process_mode = Node.PROCESS_MODE_ALWAYS
-	_build()
 	visible = false
-	_connect_bag_signals()
-	_debug_print()
+	print("InventoryUI: deprecated. Use the Gear screen (C).")
 
 
 func _connect_bag_signals() -> void:
@@ -53,8 +48,9 @@ func _debug_print() -> void:
 		print("WARNING: Could not find PlayerInventory autoload at ", BAG_PATH)
 
 
-func _input(_event: InputEvent) -> void:
-	return
+func _input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_I:
+		get_viewport().set_input_as_handled()
 
 
 func update_inventory() -> void:

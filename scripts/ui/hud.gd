@@ -104,18 +104,17 @@ func _process(_delta: float) -> void:
 		"Damage: %d" % s.damage,
 		"",
 		"STR %d   DEX %d   INT %d" % [s.strength, s.dexterity, s.intelligence],
-		"I Inventory   C Gear   E Stash",
+		"C Gear   E Stash",
 	])
 
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_C:
-			# Don't open gear screen while a level-up choice is pending.
+			# ItemViewer owns C. Block it only while a level-up choice is pending.
 			if _pending_levels > 0:
-				return
-			_toggle_gear_menu()
-			get_viewport().set_input_as_handled()
+				get_viewport().set_input_as_handled()
+			return
 
 
 func _on_experience_changed(level: int, experience: int, required: int) -> void:
