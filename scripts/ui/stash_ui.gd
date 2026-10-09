@@ -40,7 +40,7 @@ func _bind_nodes() -> void:
 		_stash = get_tree().get_first_node_in_group("stash")
 	var bag := _bag()
 	if bag != null and not bag.inventory_changed.is_connected(_on_bag_changed):
-		bag.inventory_changed.connect(_on_bag_changed)
+		bag.inventory_changed.connect(_on_bag_changed, CONNECT_DEFERRED)
 	if _stash == null:
 		push_warning("StashUI: no stash node in group 'stash'.")
 		return
@@ -49,7 +49,7 @@ func _bind_nodes() -> void:
 	if _stash.has_signal("stash_closed") and not _stash.stash_closed.is_connected(_on_stash_closed):
 		_stash.stash_closed.connect(_on_stash_closed)
 	if _stash.has_signal("stash_changed") and not _stash.stash_changed.is_connected(update_stash_display):
-		_stash.stash_changed.connect(update_stash_display)
+		_stash.stash_changed.connect(update_stash_display, CONNECT_DEFERRED)
 	if _stash.has_signal("stash_full"):
 		_stash.stash_full.connect(func() -> void: _summary.text = "Stash is full")
 	var bag_label := "MISSING"
@@ -91,9 +91,11 @@ func _refresh_bag_grid() -> void:
 
 
 func _clear_container(container: GridContainer) -> void:
+	if container == null:
+		return
 	for child in container.get_children():
 		container.remove_child(child)
-		child.free()
+		child.queue_free()
 
 
 func _on_bag_changed() -> void:
@@ -190,7 +192,7 @@ func _send_to_stash(key: String) -> void:
 		return
 	if not _stash.add_item(taken):
 		bag.add_item(taken)
-	update_stash_display()
+	call_deferred("update_stash_display")
 	_queue_save()
 
 
@@ -205,7 +207,8 @@ func _make_bag_slot(key: String) -> PanelContainer:
 	if inst.count > 1:
 		title = "%s x%d" % [title, inst.count]
 	btn.text = title
-	btn.pressed.connect(func() -> void: _show_item_detail(inst.item_id, "inventory"))
+	var bag_item_id := inst.item_id
+	btn.pressed.connect(func() -> void: _show_item_detail(bag_item_id, "inventory"))
 	btn.gui_input.connect(func(event: InputEvent) -> void:
 		if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_RIGHT:
 			_send_to_stash(key)
@@ -223,7 +226,7 @@ func _take_from_stash(key: String) -> void:
 		return
 	if not bag.add_item(taken):
 		_stash.add_item(taken)
-	update_stash_display()
+	call_deferred("update_stash_display")
 	_queue_save()
 
 
@@ -246,7 +249,8 @@ func _make_item_slot(key: String) -> PanelContainer:
 		title = "%s x%d" % [title, inst.count]
 	btn.text = title
 	btn.clip_text = true
-	btn.pressed.connect(func() -> void: _show_item_detail(inst.item_id, "stash"))
+	var stash_item_id := inst.item_id
+	btn.pressed.connect(func() -> void: _show_item_detail(stash_item_id, "stash"))
 	btn.gui_input.connect(func(event: InputEvent) -> void:
 		if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_RIGHT:
 			_take_from_stash(key)

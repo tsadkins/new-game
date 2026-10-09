@@ -40,7 +40,7 @@ func _connect_bag_signals() -> void:
 		push_warning("InventoryUI: /root/PlayerInventory not found.")
 		return
 	if not bag.inventory_changed.is_connected(update_inventory):
-		bag.inventory_changed.connect(update_inventory)
+		bag.inventory_changed.connect(update_inventory, CONNECT_DEFERRED)
 	if not bag.inventory_full.is_connected(_on_full):
 		bag.inventory_full.connect(_on_full)
 
@@ -80,7 +80,8 @@ func on_item_selected(item_instance: ItemInstance) -> void:
 		_selected_id = ""
 		return
 	_selected_id = item_instance.storage_key()
-	_refresh_grid()
+	# Rebuild after this click signal finishes so the slot is not freed mid-emit.
+	call_deferred("_refresh_grid")
 
 
 func refresh_equipment_panel() -> void:
@@ -154,7 +155,7 @@ func _refresh_grid() -> void:
 		return
 	for child in _grid.get_children():
 		_grid.remove_child(child)
-		child.free()
+		child.queue_free()
 	var keys: Array = bag.current_items.keys()
 	keys.sort()
 	for i in bag.max_inventory_size:
@@ -169,11 +170,24 @@ func _make_item_slot(key: String) -> PanelContainer:
 	var inst: ItemInstance = bag.current_items[key]
 	var def := inst.definition()
 	var slot := _slot_panel(key == _selected_id)
+	slot.mouse_filter = Control.MOUSE_FILTER_STOP
+	slot.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	var item_id := inst.item_id
+	var storage_key := key
+	slot.gui_input.connect(func(event: InputEvent) -> void:
+		if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+			_selected_id = storage_key
+			_show_item_detail(item_id, "inventory")
+			call_deferred("_refresh_grid")
+	)
+
 	var vbox := VBoxContainer.new()
+	vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_theme_constant_override("separation", 0)
 	slot.add_child(vbox)
 
 	var icon := TextureRect.new()
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	icon.custom_minimum_size = Vector2(28, 28)
 	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
@@ -188,9 +202,11 @@ func _make_item_slot(key: String) -> PanelContainer:
 		title = "[E] " + title
 	btn.text = title
 	btn.clip_text = true
-	btn.pressed.connect(func() -> void:
-		on_item_selected(inst)
-		_show_item_detail(inst.item_id, "inventory")
+	btn.gui_input.connect(func(event: InputEvent) -> void:
+		if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+			_selected_id = storage_key
+			_show_item_detail(item_id, "inventory")
+			call_deferred("_refresh_grid")
 	)
 	vbox.add_child(btn)
 
@@ -199,6 +215,7 @@ func _make_item_slot(key: String) -> PanelContainer:
 		count_lbl.text = "x%d" % inst.count
 		count_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		count_lbl.add_theme_font_size_override("font_size", 12)
+		count_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		vbox.add_child(count_lbl)
 	return slot
 
