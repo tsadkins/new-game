@@ -1,6 +1,6 @@
 extends CanvasLayer
-## Player bag + equipment. Toggle with I. Does not include the world stash.
-## Bag singleton is the autoload at /root/PlayerInventory (not a class_name).
+## Deprecated. Gameplay inventory is Item Viewer (I) in scenes/main.tscn.
+## Keep this scene for reference; do not instance it alongside ItemViewer.
 
 const BAG_PATH := "/root/PlayerInventory"
 
@@ -53,15 +53,8 @@ func _debug_print() -> void:
 		print("WARNING: Could not find PlayerInventory autoload at ", BAG_PATH)
 
 
-func _input(event: InputEvent) -> void:
-	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_I:
-		visible = not visible
-		get_tree().paused = visible
-		if visible:
-			update_inventory()
-		else:
-			_hide_detail_modal()
-		get_viewport().set_input_as_handled()
+func _input(_event: InputEvent) -> void:
+	return
 
 
 func update_inventory() -> void:

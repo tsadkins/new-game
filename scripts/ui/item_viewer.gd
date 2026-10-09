@@ -1,6 +1,6 @@
 extends CanvasLayer
-## Dev browser for every ItemDefinition in ItemDatabase, plus live bag/stash/gear tabs.
-## Attach this scene as a child of any node (or run it with F6).
+## Gameplay inventory (I) plus catalog, stash, and equipment tabs.
+## F6 this scene to browse the database without running the arena.
 
 signal item_selected(item_id: String)
 
@@ -15,6 +15,7 @@ var _tabs: TabContainer
 var _catalog_grid: GridContainer
 var _stash_grid: GridContainer
 var _equip_grid: GridContainer
+var _inventory_grid: GridContainer
 var _status: Label
 var _ui_root: Control
 var _modal: Control
@@ -34,26 +35,43 @@ func _bag() -> Node:
 
 
 func _ready() -> void:
-	layer = 20
+	layer = 12
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_build()
 	_connect_live_updates()
+	visible = get_tree().current_scene == self
 	call_deferred("refresh_all")
 
 
 func _connect_live_updates() -> void:
 	var bag := _bag()
 	if bag != null and bag.has_signal("inventory_changed"):
-		if not bag.inventory_changed.is_connected(refresh_all):
-			bag.inventory_changed.connect(refresh_all)
+		if not bag.inventory_changed.is_connected(_on_bag_changed):
+			bag.inventory_changed.connect(_on_bag_changed, CONNECT_DEFERRED)
 	var stash := _stash()
 	if stash != null and stash.has_signal("stash_changed"):
-		if not stash.stash_changed.is_connected(refresh_all):
-			stash.stash_changed.connect(refresh_all)
+		if not stash.stash_changed.is_connected(_on_stash_changed):
+			stash.stash_changed.connect(_on_stash_changed, CONNECT_DEFERRED)
+
+
+func _on_bag_changed() -> void:
+	if not visible:
+		return
+	_fill_inventory()
+	_fill_equipment()
+	_update_status()
+
+
+func _on_stash_changed() -> void:
+	if not visible:
+		return
+	_fill_stash()
+	_update_status()
 
 
 func refresh_all() -> void:
 	_fill_catalog()
+	_fill_inventory()
 	_fill_stash()
 	_fill_equipment()
 	_update_status()
@@ -73,6 +91,94 @@ func _stash() -> Node:
 	if tree == null:
 		return null
 	return tree.get_first_node_in_group("stash")
+
+
+func _input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_I:
+		_toggle()
+		get_viewport().set_input_as_handled()
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if not visible:
+		return
+	if _modal != null and _modal.visible:
+		return
+	if event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode == KEY_ESCAPE:
+			_set_open(false)
+			get_viewport().set_input_as_handled()
+		elif event.keycode == KEY_U:
+			_use_selected()
+			get_viewport().set_input_as_handled()
+		elif event.keycode == KEY_Q:
+			_equip_selected()
+			get_viewport().set_input_as_handled()
+
+
+func _toggle() -> void:
+	_set_open(not visible)
+
+
+func _set_open(open: bool) -> void:
+	visible = open
+	if open:
+		refresh_all()
+		if get_tree().current_scene != self:
+			get_tree().paused = true
+	else:
+		if _modal != null and _modal.visible and _modal.has_method("close"):
+			_modal.call("close")
+		if get_tree().paused:
+			get_tree().paused = false
+
+
+func _use_selected() -> void:
+	if _selected_id.is_empty():
+		return
+	var bag := _bag()
+	if bag != null:
+		bag.use_item(_selected_id)
+
+
+func _equip_selected() -> void:
+	if _selected_id.is_empty():
+		return
+	var bag := _bag()
+	if bag == null:
+		return
+	var inst: ItemInstance = bag.current_items.get(_selected_id)
+	if inst == null:
+		for key in bag.current_items.keys():
+			var found: ItemInstance = bag.current_items[key]
+			if found != null and found.item_id == _selected_id:
+				inst = found
+				break
+	if inst == null:
+		return
+	var def := inst.definition()
+	if def == null or not def.is_equippable():
+		return
+	bag.equip_item(def.get_equip_slot(), inst.storage_key())
+
+
+func _fill_inventory() -> void:
+	_clear(_inventory_grid)
+	var bag := _bag()
+	if bag == null:
+		_inventory_grid.add_child(_hint_label("PlayerInventory autoload not found."))
+		return
+	var keys: Array = bag.current_items.keys()
+	keys.sort()
+	if keys.is_empty():
+		_inventory_grid.add_child(_hint_label("Bag is empty. Stash starter gear lives in the chest (E)."))
+		return
+	for key in keys:
+		var inst: ItemInstance = bag.current_items[key]
+		if inst == null:
+			continue
+		var cap := "Equipped" if inst.is_equipped else ""
+		_inventory_grid.add_child(_make_instance_card(inst, cap, "inventory"))
 
 
 func _fill_catalog() -> void:
@@ -100,7 +206,7 @@ func _fill_stash() -> void:
 	for key in keys:
 		var inst: ItemInstance = stash.current_items[key]
 		if inst != null:
-			_stash_grid.add_child(_make_instance_card(inst))
+			_stash_grid.add_child(_make_instance_card(inst, "", "stash"))
 
 
 func _fill_equipment() -> void:
@@ -115,15 +221,23 @@ func _fill_equipment() -> void:
 		if inst == null:
 			continue
 		any = true
-		_equip_grid.add_child(_make_instance_card(inst, slot.replace("_", " ").capitalize()))
+		_equip_grid.add_child(_make_instance_card(inst, slot.replace("_", " ").capitalize(), "equipment"))
 	if not any:
 		_equip_grid.add_child(_hint_label("Nothing equipped."))
 
 
 func _update_status() -> void:
 	var count := load_all_items().size()
-	_status.text = "%d items in database   selected: %s" % [
+	var bag := _bag()
+	var inv_count := 0
+	var inv_max := 0
+	if bag != null:
+		inv_count = bag.slot_count()
+		inv_max = bag.max_inventory_size
+	_status.text = "%d in database   Inventory: %d/%d   selected: %s   (U use, Q equip)" % [
 		count,
+		inv_count,
+		inv_max,
 		_selected_id if not _selected_id.is_empty() else "(none)",
 	]
 
@@ -142,11 +256,12 @@ func _make_definition_card(def: ItemDefinition) -> Control:
 		def.weight,
 		def.sell_value,
 		def.make_icon(),
-		""
+		"",
+		"database"
 	)
 
 
-func _make_instance_card(inst: ItemInstance, slot_caption: String = "") -> Control:
+func _make_instance_card(inst: ItemInstance, slot_caption: String = "", context: String = "inventory") -> Control:
 	var def := inst.definition()
 	if def == null:
 		return _hint_label("Unknown item: %s" % inst.item_id)
@@ -167,7 +282,8 @@ func _make_instance_card(inst: ItemInstance, slot_caption: String = "") -> Contr
 		def.weight,
 		def.sell_value,
 		def.make_icon(),
-		extra
+		extra,
+		context
 	)
 
 
@@ -184,7 +300,8 @@ func _make_card(
 		weight: float,
 		sell_value: float,
 		icon: Texture2D,
-		caption: String
+		caption: String,
+		context: String = "viewer"
 	) -> Control:
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color(0.08, 0.09, 0.12, 0.92)
@@ -206,7 +323,7 @@ func _make_card(
 	card.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	card.gui_input.connect(func(event: InputEvent) -> void:
 		if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-			_on_card_clicked(item_id)
+			_on_card_clicked(item_id, context)
 	)
 
 	var body := VBoxContainer.new()
@@ -267,15 +384,15 @@ func _make_card(
 	return card
 
 
-func _on_card_clicked(item_id: String) -> void:
+func _on_card_clicked(item_id: String, context: String = "inventory") -> void:
 	_selected_id = item_id
 	item_selected.emit(item_id)
 	_update_status()
-	_show_item_detail(item_id)
+	_show_item_detail(item_id, context)
 
 
-func _show_item_detail(item_id: String) -> void:
-	if _modal == null:
+func _show_item_detail(item_id: String, context: String = "inventory") -> void:
+	if _modal == null or not is_instance_valid(_modal):
 		var packed := load("res://scenes/ui/item_detail_modal.tscn") as PackedScene
 		if packed == null:
 			push_error("Item Viewer: missing res://scenes/ui/item_detail_modal.tscn")
@@ -283,7 +400,7 @@ func _show_item_detail(item_id: String) -> void:
 		_modal = packed.instantiate() as Control
 		_ui_root.add_child(_modal)
 	if _modal.has_method("open_item"):
-		_modal.call("open_item", item_id, "viewer")
+		_modal.call("open_item", item_id, context)
 	elif _modal.has_method("load_item_data"):
 		_modal.call("load_item_data", item_id)
 
@@ -393,7 +510,7 @@ func _clear(grid: GridContainer) -> void:
 		return
 	for child in grid.get_children():
 		grid.remove_child(child)
-		child.free()
+		child.queue_free()
 
 
 func _build() -> void:
@@ -426,7 +543,7 @@ func _build() -> void:
 	vbox.add_child(header)
 
 	var title := Label.new()
-	title.text = "Item Viewer"
+	title.text = "Inventory"
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	title.add_theme_font_size_override("font_size", 28)
 	title.add_theme_color_override("font_color", Color.WHITE)
@@ -446,9 +563,10 @@ func _build() -> void:
 	_tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	vbox.add_child(_tabs)
 
-	_catalog_grid = _make_scroll_tab("Inventory")
-	_stash_grid = _make_scroll_tab("Stash")
+	_inventory_grid = _make_scroll_tab("Inventory")
 	_equip_grid = _make_scroll_tab("Equipment")
+	_stash_grid = _make_scroll_tab("Stash")
+	_catalog_grid = _make_scroll_tab("Database")
 
 
 func _make_scroll_tab(tab_name: String) -> GridContainer:
